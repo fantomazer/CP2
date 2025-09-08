@@ -1,0 +1,128 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+
+# Створення даних
+np.random.seed(42)
+size = 100
+hours = np.random.normal(5, 1.5, size)
+attendance = np.clip(hours * 8 + np.random.normal(30, 10, size), 0, 128)
+exam = np.clip(hours * 7 + attendance * 0.3 + np.random.normal(0, 8, size), 0, 100)
+satisfaction = np.clip(exam * 0.1 + np.random.normal(5, 2, size), 0, 10)
+add_courses = np.random.normal(10, 5, size)
+add_courses = np.clip(add_courses, 0, 25)
+
+df = pd.DataFrame({
+    'study_hours': hours,
+    'attendance_rate': attendance,
+    'exam_score': exam,
+    'satisfaction': satisfaction,
+    'add_courses': add_courses
+})
+
+# Побудова регресійної моделі
+model_formula = 'exam_score ~ study_hours + attendance_rate + satisfaction + add_courses'
+model = ols(formula=model_formula, data=df).fit()
+
+# Створення зведеної таблиці результатів
+results_summary = model.summary()
+
+# Конвертуємо результати в DataFrame для кращого форматування
+results_table = pd.read_html(results_summary.tables[1].as_html(), header=0, index_col=0)[0]
+
+# Додаємо інтерпретацію значущості
+def interpret_significance(p_value):
+    if p_value < 0.001:
+        return '***'
+    elif p_value < 0.01:
+        return '**'
+    elif p_value < 0.05:
+        return '*'
+    elif p_value < 0.1:
+        return '.'
+    else:
+        return 'не знач.'
+
+# Додаємо інтерпретацію впливу
+def interpret_impact(coef):
+    if abs(coef) >= 3.0:
+        return 'Дуже сильний'
+    elif abs(coef) >= 1.5:
+        return 'Сильний'
+    elif abs(coef) >= 0.5:
+        return 'Помірний'
+    else:
+        return 'Слабкий'
+
+# Створюємо фінальну таблицю для відображення
+final_table = pd.DataFrame({
+    'Змінна': results_table.index,
+    'Коефіцієнт (β)': results_table['coef'].round(3),
+    'Стандартна помилка': results_table['std err'].round(3),
+    't-статистика': results_table['t'].round(3),
+    'P-значення': results_table['P>|t|'].round(4),
+    'Значимість': [interpret_significance(p) for p in results_table['P>|t|']],
+    'Сила впливу': [interpret_impact(coef) for coef in results_table['coef']],
+    'Інтервал довіри 95% нижня межа': results_table['[0.025'].round(3),
+    'Інтервал довіри 95% верхня межа': results_table['0.975]'].round(3)
+})
+
+# Додаємо загальні метрики моделі в окремий DataFrame
+model_metrics = pd.DataFrame({
+    'Метрика': ['R²', 'Скоригований R²', 'F-статистика', 'P-значення (F)', 'Стандартна помилка регресії'],
+    'Значення': [
+        model.rsquared.round(4),
+        model.rsquared_adj.round(4),
+        model.fvalue.round(2),
+        model.f_pvalue,
+        np.sqrt(model.mse_resid).round(3)
+    ]
+})
+
+# Виводимо результати
+print("="*80)
+print("РЕЗУЛЬТАТИ ЛІНІЙНОГО РЕГРЕСІЙНОГО АНАЛІЗУ")
+print("Залежна змінна: exam_score (Підсумковий бал на іспиті)")
+print("="*80)
+
+print("\n ТАБЛИЦЯ КОЕФІЦІЄНТІВ РЕГРЕСІЇ:")
+print(final_table.to_string(index=False))
+
+print(f"\n ЗАГАЛЬНА ЯКІСТЬ МОДЕЛІ:")
+print(model_metrics.to_string(index=False))
+
+print(f"\n ІНТЕРПРЕТАЦІЯ ЗНАЧУЩОСТІ:")
+print("*** - p < 0.001 (дуже високо значимий)")
+print("**  - p < 0.01 (дуже значимий)")
+print("*   - p < 0.05 (значимий)")
+print(".   - p < 0.1 (слабко значимий)")
+print("не знач. - p > 0.1 (не значимий)")
+
+print("\n" + "="*80)
+print(" ВИСНОВКИ ТА ІНТЕРПРЕТАЦІЯ РЕЗУЛЬТАТІВ:")
+print("="*80)
+
+# Автоматичні висновки на основі результатів
+significant_vars = final_table[final_table['P-значення'] < 0.05]
+strongest_impact = significant_vars.loc[significant_vars['Коефіцієнт (β)'].abs().idxmax()]
+
+print(f"1. Модель пояснює {model.rsquared:.1%} дисперсії залежної змінної (R² = {model.rsquared:.3f}).")
+print(f"2. Модель є статистично значущою (p = {model.f_pvalue:.3e}).")
+print(f"3. Найсильніший вплив на підсумковий бал має змінна '{strongest_impact['Змінна']}' (β = {strongest_impact['Коефіцієнт (β)']:.3f}).")
+
+print("\n4. Детальний аналіз впливу змінних:")
+for _, row in significant_vars.iterrows():
+    direction = "позитивний" if row['Коефіцієнт (β)'] > 0 else "негативний"
+    print(f"   - {row['Змінна']}: {direction} вплив ({row['Сила впливу']}), β = {row['Коефіцієнт (β)']:.3f} {row['Значимість']}")
+
+# Додаткова інформація про модель
+print(f"\n5. Стандартна помилка прогнозу: {np.sqrt(model.mse_resid):.2f} балів.")
+print(f"6. Кількість спостережень: {model.nobs}")
+print("7. Рівняння регресії:")
+equation = f"exam_score = {results_table.loc['Intercept', 'coef']:.2f}"
+for var in results_table.index[1:]:
+    coef = results_table.loc[var, 'coef']
+    sign = '+' if coef >= 0 else ''
+    equation += f" {sign} {coef:.2f}*{var}"
+print(f"   {equation}")
