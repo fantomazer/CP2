@@ -1,0 +1,39 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+import matplotlib.pyplot as plt
+
+# Створення даних
+np.random.seed(42)
+size = 100
+hours = np.random.normal(5, 1.5, size)
+attendance = np.clip(hours * 8 + np.random.normal(30, 10, size), 0, 128)
+exam = np.clip(hours * 7 + attendance * 0.3 + np.random.normal(0, 8, size), 0, 100)
+satisfaction = np.clip(exam * 0.1 + np.random.normal(5, 2, size), 0, 10)
+add_courses = np.random.normal(10, 5, size)
+add_courses = np.clip(add_courses, 0, 25)
+
+df = pd.DataFrame({
+    'study_hours': hours,
+    'attendance_rate': attendance,
+    'exam_score': exam,
+    'satisfaction': satisfaction,
+    'add_courses': add_courses
+})
+
+# Визначення формули регресії: залежна змінна = незалежні_1 + незалежні_2 + ...
+model_formula = 'exam_score ~ study_hours + attendance_rate + satisfaction + add_courses'
+
+# Побудова моделі
+model = ols(formula=model_formula, data=df).fit()
+
+# Вивід детальної звіту по моделі
+print(model.summary())
+
+# Побудова графіка розподілу залишків
+residuals = model.resid
+plt.figure(figsize=(10, 6))
+sm.qqplot(residuals, line='s', ax=plt.gca())  # Q-Q plot для перевірки нормальності
+plt.title('Q-Q plot залишків регресійної моделі')
+plt.show()
