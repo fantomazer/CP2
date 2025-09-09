@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# 1. Створення даних
+np.random.seed(42)
+size = 100
+hours = np.random.normal(5, 1.5, size)
+attendance = np.clip(hours * 8 + np.random.normal(30, 10, size), 0, 128)
+exam = np.clip(hours * 7 + attendance * 0.3 + np.random.normal(0, 8, size), 0, 100)
+satisfaction = np.clip(exam * 0.1 + np.random.normal(5, 2, size), 0, 10)
+add_courses = np.clip(np.random.normal(10, 5, size), 0, 25)
+
+df = pd.DataFrame({
+    'study_hours': hours,
+    'attendance_rate': attendance,
+    'exam_score': exam,
+    'satisfaction': satisfaction,
+    'add_courses': add_courses
+})
+
+# 2. Побудова моделі
+model_formula = 'exam_score ~ study_hours + attendance_rate + satisfaction + add_courses'
+model = ols(formula=model_formula, data=df).fit()
+
+# 3. Результати моделі
+print(model.summary())
+
+# 4. Рівняння регресії
+params = model.params
+print("\nРівняння регресії:")
+print(f"exam_score = {params['Intercept']:.2f} + "
+      f"({params['study_hours']:.2f} * study_hours) + "
+      f"({params['attendance_rate']:.2f} * attendance_rate) + "
+      f"({params['satisfaction']:.2f} * satisfaction) + "
+      f"({params['add_courses']:.2f} * add_courses)")
+
+# 5. Перевірка залишків
+residuals = model.resid
+
+# Перевірка залишків (правильний Q-Q plot)
+sm.qqplot(residuals, line='45', fit=True)
+plt.title("Q-Q plot залишків регресійної моделі")
+plt.show()
+
+
+# Гістограма залишків
+plt.figure(figsize=(6,4))
+sns.histplot(residuals, bins=20, kde=True, color="skyblue")
+plt.title("Розподіл залишків")
+plt.xlabel("Залишки")
+plt.show()
+
+# 6. Фактичні vs передбачені значення
+predictions = model.predict(df)
+
+plt.figure(figsize=(6,6))
+sns.scatterplot(x=df['exam_score'], y=predictions, color="navy", alpha=0.7)
+plt.plot([0, 100], [0, 100], color="red", linestyle="--")  # ідеальна лінія
+plt.xlabel("Фактичні значення (exam_score)")
+plt.ylabel("Прогнозовані значення")
+plt.title("Фактичні vs прогнозовані бали студентів")
+plt.show()
